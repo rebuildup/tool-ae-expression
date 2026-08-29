@@ -1,6 +1,6 @@
 "use client";
 
-import ToolWrapper from "../../../../external/ui/src/ToolWrapper";
+import ToolWrapper from "../../../../src/components/tools-ui/ToolWrapper";
 import { ExpressionControls } from "./ExpressionControls";
 import { ExpressionList } from "./ExpressionList";
 import { ExpressionOutput } from "./ExpressionOutput";
