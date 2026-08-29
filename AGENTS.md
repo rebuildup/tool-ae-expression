@@ -65,10 +65,17 @@ project-local Skill は `.claude/skills/` 以下。発火条件が明確な単�
 
 ## Branch / worktree policy
 
-- **local `main` のみで作業**。
-- 明示指定なく feature branch / temporary branch / worktree を作成しない。
-- parallel subagent も local `main` 上で disjoint file ownership で並行実装する。
+- **PR-driven**: すべての変更は Pull Request 経由で `main` へマージする。
+- `main` は GitHub branch protection rule で保護されている
+  (PR 必須 / 直 push禁止 / force push 禁止 / admin も enforce / 詳細は
+  `docs/adr/0003-pr-driven-workflow.md`)。
+- solo maintainer 運用に合わせ、PR review は必須としない
+  (`required_approving_review_count: 0`)。
+- parallel subagent は disjoint file ownership を保ったまま、共通の
+  feature branch を共有するか、または subagent ごとに branch を切るかは
+  task 単位で判断する (ADR 0002 の disjoint ownership rule は維持)。
 - コミット操作は直列化し、各 subagent / 論理単位ごとに独立 commit する。
+- 緊急時の admin bypass は `gh pr merge --admin` 等で明示的に行う。
 
 ## Mode / permission / trust
 

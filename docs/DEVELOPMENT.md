@@ -48,6 +48,8 @@ bun run test       # lint && build (現状 test framework なし)
 | `docs/DEVELOPMENT.md` | 本ファイル |
 | `docs/adr/` | ADR (MADR minimal subset) |
 | `.claude/skills/` | project-local Agent Skills |
+| `.github/PULL_REQUEST_TEMPLATE.md` | PR テンプレート |
+| `.github/branch-protection.json` | branch protection rule の source of truth |
 | `.tmp/` | 検証 artifact (gitignored) |
 | `.reference/` | 参照 repo clone (gitignored) |
 
@@ -82,7 +84,9 @@ bun run test
 
 - `AGENTS.md` (dispatcher) と `.claude/skills/` (詳細) を常に参照する。
 - ADR は「あるべき最終状態」を記述する。実装 diary / TODO / 過去 idea は ADR に書かない。
-- local `main` のみで作業し、worktree / temporary branch を勝手に作らない。
+- すべての変更は Pull Request 経由で `main` へマージする (PR駆動)。
+  `main` は branch protection で保護されており直 push / force push は不可。
+  詳細は `docs/adr/0003-pr-driven-workflow.md`。
 - 並列 subagent は disjoint file ownership のみ。同 file の同時編集は禁止。
 - commit 操作は直列化し、agent / 論理単位ごとに dedicated commit にする。
 - error / warning / skip を suppression で隠さない。root cause を直す。
