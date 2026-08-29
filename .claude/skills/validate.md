@@ -1,6 +1,6 @@
 ---
 name: validate
-description: Use when finishing any implementation task in tool-ae-expression — runs the canonical quality gate end-to-end (install, lint, type-check, build, smoke test) and reports pass/fail with the exact command output. Triggers on "validate", "run checks", "is it green", "quality gate", "everything passes", or any task ending step.
+description: Use when finishing any implementation task in tool-ae-expression — runs the canonical quality gate end-to-end via the host app's toolchain and reports pass/fail with the exact command output. Triggers on "validate", "run checks", "is it green", "quality gate", "everything passes", or any task ending step.
 ---
 
 # validate
@@ -8,6 +8,10 @@ description: Use when finishing any implementation task in tool-ae-expression �
 実装タスク完了直前に必ず通す canonical quality gate。
 `AGENTS.md` の validation entry point を具体コマンド列へ展開し、
 skip / ignore / suppression を残さずに合格させる。
+
+この repo は **per-tool source-only** であり build / lint / type-check /
+test pipeline を持たない (ADR 0001)。validation は **host
+(`my-web-2025`) 側** で実行する。
 
 ## When to use
 
@@ -18,66 +22,83 @@ skip / ignore / suppression を残さずに合格させる。
 
 ## Canonical command sequence
 
-現行 `package.json` scripts に基づく順序 (依存関係あり: 後の step は前の step
-が green でないと意味がない):
+host (`my-web-2025`) 側の scripts を順に実行する。各 step は前の step が
+green でないと意味がない。`cd ../my-web-2025` で sibling に移動してから
+host の commands を直接叩く:
 
 ```sh
-# 1) install (lockfile 変更があれば commit 前)
-bun install
+# sibling の host に移動
+cd ../my-web-2025
 
-# 2) formatter / lint
+# 1) install (lockfile 変更があれば commit 前)
+bun install --frozen-lockfile
+
+# 2) type check (host)
+bun run type-check
+
+# 3) formatter / lint (host)
 bun run lint
 
-# 3) type check
-bun run typecheck
-
-# 4) build (prod bundle)
+# 4) build (host)
 bun run build
 
-# 5) 合成 gate (lint + build の逐次実行)
+# 5) tests (host)
 bun run test
 ```
 
-`bun run test` は現状 `bun run lint && bun run build` の合成。test framework
-未導入の段階では最後の gate として扱う。
+`my-web-2025` の host toolchain がこの tool の source を filesystem
+traversal でカバーする。host の CI が green であればこの tool も green。
 
 ## Pre-flight checks
 
 実行前に次を確認:
 
-1. `package.json` に上記 scripts が全て存在するか。
-   無ければ ADR 0001 / `docs/DEVELOPMENT.md` を読んで正しい script 名を使う。
-2. `bun.lock` (Bun lockfile) が committed されているか。
-3. `node_modules/` が missing なら `bun install` を最初に 1 回だけ実行。
-4. host package (`link:../../ui/src`) が無くて `bun install` が失敗する場合、
-   失敗を逆手に取り ADR 0002 の scope 確認 — host 依存は per-tool の責務外。
+1. `my-web-2025` が sibling として存在するか
+   (`ls ../my-web-2025/package.json` で確認)。無ければ host 側 setup が
+   完了していない。
+2. `my-web-2025` の `package.json` scripts に上記 5 step が全て存在するか
+   (ADR 0001 を満たす前提)。
+3. `my-web-2025/src/components/tools-ui/ToolWrapper.tsx` が存在するか。
+   import 経路の前提条件。
+4. host package の `tsconfig.json` がこの repo の source をカバーするか
+   (host の `include` 設定に依存)。
+5. host 側で `bun install` 済みか。`node_modules` が無ければ 1) を最初に
+   1 回だけ実行。
 
 ## Post-conditions
 
 合格条件:
 
 - 全 step の exit code が 0
-- Biome / TypeScript / Vite から actionable warning が出ていない
+- Biome / TypeScript / Next.js から actionable warning が出ていない
   (suppressed でなく、出ていない)
 - skip / `.only` / blanket ignore / warning suppression を使っていない
 - scope を縮小していない (要求された全範囲が動作している)
 
 不合格時の対処:
 
-1. 失敗 step を 1 個だけ直す (cherry-picking で判明する)
-2. 同じ cherry-picked fix を `bun run typecheck` まで繰り返し上流から流す
+1. 失敗 step を 1 個だけ直す (chercherry-picking で判明する)
+2. 同じ fix を `bun run type-check` まで繰り返し上流から流す
 3. blanket な `--no-warn` / ignore / skip を入れない
 4. 必要なら該当 ADR / dev doc を更新する
+5. tool 単独の pipeline  を追加したくなる誘惑に負けない — 必ず host 側で
+   直す (ADR 0001)
 
 ## ADR / doc references
 
-- `docs/adr/0001-toolchain.md` — Bun / Biome / Vite / TS の根拠
-- `docs/adr/0002-architecture.md` — host 依存失敗時の責務境界
+- `docs/adr/0001-toolchain.md` — host 側 toolchain への参照、per-tool
+  pipeline を持たない理由
+- `docs/adr/0002-architecture.md` — sibling layout 制約、embed 経路
+- `docs/adr/0003-pr-driven-workflow.md` — PR-driven + main protection
 - `docs/DEVELOPMENT.md` — 詳細手順
 
 ## Anti-patterns
 
 - `|| true` で exit code を握り潰す
 - ignore / suppress を追加して lint を green に見せる
+- tool 単体に `tsconfig.json` / `biome.json` / `package.json` scripts を
+  追加して host と重複させる (ADR 0001)
 - `bun run build` を skip して type-check だけ緑にする (commit の意味が消える)
 - `bun run test` だけが緑なら満足し、type-check を走らせない
+- sibling layout を崩したまま validation を強行する (host の import が
+  解決できない)

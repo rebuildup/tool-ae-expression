@@ -3,21 +3,34 @@ AI コーディングエージェント向けの canonical project contract (dis
 
 ## Project identity
 
-- **Name**: `tool-ae-expression`
-- **Role**: per-tool React component under `@rebuildup/my-web-tools-ui`
+- **Repo name**: `tool-ae-expression` (GitHub repo)
+- **Package name**: `@rebuildup/tool-ae-expression` (private npm name; never
+  published — reserved for in-workspace identification only)
+- **Role**: per-tool source-only repo for one tool (After Effects
+  Expression Helper) embedded into the `my-web-2025` host app via
+  filesystem-relative import.
 - **License**: MIT (Copyright samuido 2026)
 - **Remote**: `github.com/rebuildup/tool-ae-expression`
-- **Boundaries**: source under `src/` only. Host app source (linked via
-  `link:../../ui/src`) is owned by `@rebuildup/my-web-tools-ui`, not this repo.
+- **Boundaries**:
+  - Source under `src/` is owned by this repo.
+  - Host app source (`my-web-2025/src/components/tools-ui/`) is owned by
+    `my-web-2025`, **not** this repo.
+  - Embed mechanism is filesystem-relative
+    (`../../../../src/components/tools-ui/ToolWrapper`), **not** npm
+    `link:` and **not** registry publishing.
+  - Layout requirement: this repo must live at `Desktop/tool-ae-expression/`
+    as a sibling of `Desktop/my-web-2025/`.
 
 ## Toolchain (project-local)
 
-- **Package manager / runner**: Bun (single lockfile, no npm/pnpm/yarn)
-- **Build / dev**: Vite 6 + `@vitejs/plugin-react`
-- **Language**: TypeScript 5.6 (strict)
+- **Language**: TypeScript (strict; declared in source, validated by host)
 - **UI**: React 19 + react-dom 19
-- **Formatter / Lint**: Biome 1.9
-- **Runtime target**: Bun on Windows, WSL, Linux, macOS
+- **Icons**: `lucide-react`
+- **Runtime target**: Next.js 16 (peer; provided by host)
+- **Package manager / build / lint / test**: lives in host
+  (`my-web-2025`); this repo has **no** `package.json` scripts, **no**
+  committed lockfile, **no** `tsconfig.json`, **no** formatter/lint config
+  by design (ADR 0001 § Decision).
 
 詳細決定は `docs/adr/0001-toolchain.md` を参照。
 
@@ -41,27 +54,28 @@ AI コーディングエージェント向けの canonical project contract (dis
 
 ## Validation entry point
 
-canonical 検証コマンドは `docs/DEVELOPMENT.md` を参照。
-基本形:
+このリポジトリ単体に build / lint / test pipeline は**存在しない** (ADR 0001)。
+canonical 検証は host (`my-web-2025`) 側で行う:
 
 ```
-bun install
+cd ../my-web-2025
+bun install --frozen-lockfile
+bun run type-check
 bun run lint
-bun run typecheck
 bun run build
 bun run test
 ```
 
-`bun run test` は lint + build の合成 gate (現状 test framework なし)。
+host 側の toolchain がこの tool の source を filesystem traversal で
+カバーする。host の CI が green であればこの tool も green。
 詳細は `.claude/skills/validate.md` を参照。
 
 ## Skill discovery
 
 project-local Skill は `.claude/skills/` 以下。発火条件が明確な単位で分割してあり、
-例:
 
 - `project-context`: リポジトリ brief (常時 load される dispatcher の補完)
-- `validate`: 検証コマンドの正確実行
+- `validate`: 検証コマンドの正確実行 (host 側の validation を呼び出す)
 
 ## Branch / worktree policy
 
@@ -82,7 +96,8 @@ project-local Skill は `.claude/skills/` 以下。発火条件が明確な単�
 - active mode の範囲内で動く。permission gate の bypass を試さない。
 - global plugin / global agent memory / undocumented host state に依存しない。
 - project-local files (`AGENTS.md`, `.claude/skills/`, `docs/adr/`,
-  `package.json`, `bun.lock`) を source of truth とする。
+  `package.json`) を source of truth とする (lockfile は host 側で
+  保有)。
 
 ## Working directories
 
@@ -94,6 +109,7 @@ project-local Skill は `.claude/skills/` 以下。発火条件が明確な単�
 
 - `README.md` — public overview (English)
 - `docs/DEVELOPMENT.md` — internal development guide (日本語)
-- `docs/adr/0001-toolchain.md` — AI agent toolchain decision
-- `docs/adr/0002-architecture.md` — per-tool workspace architecture
+- `docs/adr/0001-toolchain.md` — AI agent toolchain decision (revised)
+- `docs/adr/0002-architecture.md` — per-tool source-only architecture (revised)
+- `docs/adr/0003-pr-driven-workflow.md` — PR-driven workflow + `main` branch protection
 - `.claude/skills/*.md` — project-local Skills
