@@ -1,121 +1,201 @@
-# ADR 0002 — Architecture: per-tool workspace
+# ADR 0002 — Architecture: per-tool source-only repo (revised)
 
-- Status: Accepted
+- Status: Revised (2026-08-29)
 - Date: 2026-08-29
-- Supersedes: implicit assumption in `README.md` referencing an external
-  `my-web-2025` specification that is **not present in this repository or any
-  sibling directory on the working machine**. The repo is currently a standalone
-  scaffold; the "embed via my-web-2025 spec" claim is unverified.
+- Supersedes: the original "Vite standalone" assumption documented in
+  this ADR's prior version and in `AGENTS.md` Toolchain section before
+  PR #1. The previous "the host machine has no `ui/src` link target"
+  claim was wrong — `my-web-2025` IS present at `Desktop/my-web-2025/`
+  and the embed model is filesystem-relative import, not package
+  linking.
+- Revision: 2026-08-29 — revised to match the Next.js consumer model
+  introduced by PR #1 (`feat: migrate AE Expression sources from
+  my-web-2025`).
 
 ## Context
 
-このリポジトリは `README.md` によれば「Standalone ae-expression tool. See
-my-web-2025 spec for embed instructions.」と説明されている。`package.json` の
-dependencies には `link:../../ui/src` で `@rebuildup/my-web-tools-ui` を相対パス link
-している。
+This repository is a **per-tool source-only repo** that contributes one
+tool (`tool-ae-expression`) to the host application (`my-web-2025`).
+PR #1 migrated the actual React/Next.js implementation from
+`my-web-2025`'s monorepo into this repo.
 
-ただし:
+Observed facts after PR #1:
 
-- `../../ui/src` は host machine 上に存在しない (`C:\Users\rebui\Desktop\ui`
-  ディレクトリは未作成)。
-- `my-web-2025` 仕様書はこのリポジトリにも `../../../docs` 等の親にも存在しない。
-- source は placeholder 1 ファイル (`AeExpressionApp.tsx` が `AeExpression placeholder`
-  を返すのみ)。
+- `package.json` declares `@rebuildup/tool-ae-expression` as a `private`
+  package with `main` / `types` / `exports` all pointing at
+  `./src/index.ts`. No Vite, no Biome, no build script. No
+  `packageManager` field, no committed lockfile.
+- `dependencies`: `react`, `react-dom`, `lucide-react`.
+  `peerDependencies`: `next ^16.3.0`.
+- `src/components/AEExpressionTool.tsx` imports
+  `../../../../src/components/tools-ui/ToolWrapper` — a relative path
+  that resolves to
+  `Desktop/my-web-2025/src/components/tools-ui/ToolWrapper.tsx` when
+  this repo lives at `Desktop/tool-ae-expression/` as a sibling of
+  `my-web-2025/`.
+- `src/AeExpressionApp.tsx` is a Next.js page wrapper using `next/link`
+  and Tailwind utility classes.
+- `src/components/useAEExpressionTool.ts` owns ~15 pieces of tool-local
+  state via `useState` (search term, selected category, parameters,
+  saved expressions, etc.). No persistence beyond in-memory state.
+- `src/components/ae-expression-data.ts` holds ~286 lines of static
+  expression definitions (no I/O, no fetch).
+- Total source surface: ~1320 LOC across `src/`.
 
-つまり、現状は「per-tool workspace として独立した最小 scaffold」が reality であり、
-「host app に embed される」前提は将来設計である。
+The repo is therefore:
+
+- A pure source-only package — no standalone build, no dev server, no
+  test framework, no formatter/lint config.
+- Validated indirectly by `my-web-2025`'s build (`bun run type-check`,
+  `bun run build`, `bun run lint`) which traverses this code via the
+  filesystem layout.
 
 ## Decision
 
-### 役割の境界
+### Role boundaries
 
-このリポジトリは:
+This repository:
 
-- 単一の独立 React アプリとして build / preview できる
-- 将来、host から `link:../../ui/src` 経由で embed される可能性に備えている
-- host (`@rebuildup/my-web-tools-ui`) の source には触らない
-- host 側の routing / state / styling convention には現状依存しない
-  (host package が存在しない以上、依存先不明)
+- Owns **per-tool source** for one tool: `tool-ae-expression`.
+- Has **no build pipeline of its own**. Compilation, lint, type-check,
+  and bundling all happen in the host app's context.
+- Is consumed by `my-web-2025` via filesystem-relative imports, **not**
+  via `package.json` `link:` and **not** via registry publishing. Layout
+  requirement: this repo must live at `Desktop/tool-ae-expression/` as a
+  sibling of `Desktop/my-web-2025/`.
+- Is **private** — never published to npm. The `@rebuildup/tool-*`
+  namespace is reserved for in-workspace identifiers only.
 
-### 何が意図的に out of scope か
+### What is intentionally out of scope here
 
-- host app の routing / state 管理 / design system の詳細
-  (host package が存在しないため抽象的にしか参照できない)
-- test framework の選択 (機能実装が必要になった時点で ADR 0001 に従って導入)
-- CI / CD (release / deploy の責任は host app に集約する想定。per-tool 単体での
-  release は当面考えない)
-- 国際化対応 (UI 実装が先に立って判断する)
+- Build / dev server / bundler config (host owns these).
+- Test framework (host owns these; tool-level tests would re-enter
+  host's test runner when added).
+- Lint / formatter config (host owns these).
+- Documentation for host-side embedding protocol
+  (`my-web-2025/spec/`); that spec lives in `my-web-2025` itself.
+- Internationalization (decided at host level).
+- Persistence of user data (`savedExpressions` etc.). Tool owns the
+  in-memory state shape; persistence layer (host CMS / localStorage /
+  etc.) is host's responsibility.
 
 ### Source layout
 
 ```
 .
-├── AGENTS.md              # AI agent dispatcher (canonical project contract)
-├── README.md              # Public-facing repo overview (English)
-├── LICENSE                # MIT, Copyright samuido 2026
-├── package.json           # Bun / Vite / React 19 / TS 5.6 / Biome 1.9
+├── AGENTS.md                              # dispatcher
+├── README.md                              # public overview (English)
+├── LICENSE                                # MIT
+├── package.json                           # @rebuildup/tool-ae-expression, private
 ├── src/
-│   ├── index.ts           # Public re-export (entry point for embed)
-│   └── AeExpressionApp.tsx # Placeholder root component
+│   ├── index.ts                           # public re-export (entry point)
+│   ├── AeExpressionApp.tsx                # Next.js page wrapper (Breadcrumb + tool)
+│   └── components/
+│       ├── AEExpressionTool.tsx           # tool root; uses host's ToolWrapper
+│       ├── ExpressionControls.tsx         # search/filter/preferences UI
+│       ├── ExpressionList.tsx             # selectable list of expressions
+│       ├── ExpressionParameters.tsx       # per-expression parameter inputs
+│       ├── ExpressionOutput.tsx           # generated code + validation + preview
+│       ├── useAEExpressionTool.ts         # state hook (all tool-local state)
+│       ├── ae-expression-data.ts          # static expression definitions
+│       ├── ae-expression-types.ts         # domain types
+│       └── ae-expression-utils.ts         # filtering / generation / validation
 ├── docs/
-│   ├── DEVELOPMENT.md     # Internal dev guide (Japanese)
-│   └── adr/               # Architecture Decision Records
-│       ├── 0001-toolchain.md
-│       └── 0002-architecture.md
-└── .claude/
-    └── skills/            # Project-local Agent Skills
+│   ├── DEVELOPMENT.md                     # internal dev guide (Japanese)
+│   └── adr/
+│       ├── 0001-toolchain.md              # AI agent toolchain (revised)
+│       ├── 0002-architecture.md           # this ADR (revised)
+│       └── 0003-pr-driven-workflow.md     # PR-driven + main protection
+├── .claude/
+│   └── skills/                            # project-local Agent Skills
+└── .github/
+    ├── PULL_REQUEST_TEMPLATE.md
+    └── branch-protection.json
 ```
-
-この layout は Vite + React 19 official scaffold (`bun create vite`) の最小形を
-踏襲し、`docs/` と `.claude/skills/` を追加する。`docs/adr/` は
-[MADR](https://adr.github.io/madr/) の minimal subset (Context / Decision /
-Consequences / Re-evaluation) に従う。
 
 ### Dependency direction
 
-- `src/index.ts` → `src/AeExpressionApp.tsx` (single component export)
-- `@rebuildup/my-web-tools-ui` は `link:../../ui/src` で link。host 側に
-  変更が入った場合は `bun install` で再 link し直す
-- `@rebuildup/my-web-tools-ui` の type / API 不整合はこのリポジトリの責務ではなく
-  host の責務。import path が壊れたら host 側で修正されるか、このリポジトリで
-  adapter を 1 枚挟むかは host の判断に従う
+- `src/index.ts` → `src/AeExpressionApp.tsx`
+- `src/AeExpressionApp.tsx` → `src/components/AEExpressionTool.tsx`
+  + `next/link` (peer)
+- `src/components/AEExpressionTool.tsx` →
+  `../../../../src/components/tools-ui/ToolWrapper` (host app, **not**
+  this repo) + sibling components in `src/components/`
+- `src/components/useAEExpressionTool.ts` →
+  `src/components/ae-expression-{data,types,utils}.ts`
+
+The cross-host relative import is the **single fragile coupling** of
+this model. The tool repo MUST live as a sibling of `my-web-2025` for
+the import to resolve. If this layout changes, the import must be
+updated here.
 
 ### State ownership
 
-- 状態 (現在のモード / 入力値 / ユーザー設定) は当面 host / link 先に集約
-- この per-tool 単体で完結する state を持つ場合は `src/state/` 以下に
-  colocate する設計を将来採る
+- All tool-local state lives in `useAEExpressionTool` (one hook, ~15
+  `useState` calls). UI components receive state and setters as props
+  from `AEExpressionTool`.
+- Persistence: not implemented at tool level. `savedExpressions` is
+  in-memory only. If persistence is needed, the hook should be
+  refactored to accept a persistence adapter from the host.
 
 ### Naming
 
-- 階層名は責務を表し、上位で表現済みの語を leaf で繰り返さない
-- `src/AeExpressionApp.tsx` は host に embed される root component であり、
-  将来 feature が入ったら `src/AeExpressionApp/` 配下に sub-component を置く
-- dumping-ground 名 (`utils`, `helpers`, `common`, `misc`, `manager`) を避ける
+- `src/AeExpressionApp.tsx` is the **Next.js page-level entry**. The
+  `App` suffix communicates "Next.js route entry".
+- `src/components/AEExpressionTool.tsx` is the **tool-level root** (the
+  unit the host treats as embeddable). The `Tool` suffix matches the
+  host's `ToolWrapper` naming convention.
+- Internal components (`ExpressionControls`, `ExpressionList`, etc.)
+  drop the `AE` / `Tool` prefix when scoped within the tool — the
+  surrounding folder already conveys context.
+- `ae-expression-data.ts` / `ae-expression-types.ts` /
+  `ae-expression-utils.ts` use kebab-case (matches the file's domain
+  name, not the namespace).
+- Dumping-ground names (`utils`, `helpers`, `common`, `misc`, `manager`)
+  forbidden. Note: `ae-expression-utils.ts` is **not** a dumping-ground;
+  it holds this tool's domain-specific pure functions (filtering /
+  generation / validation).
 
 ### Persistence boundaries
 
-- per-tool 単体では永続化を持たない
-- 設定 / 履歴は host の storage 抽象 (将来判明) 経由で使う
-- localStorage を直接触る必要がある場合でも、host の helper を経由する
+- Per-tool: none. State resets on remount.
+- If persistence is added: receive a `persistenceAdapter` prop or
+  context from host; do not touch `localStorage` / `IndexedDB` directly.
 
 ### Side-effect boundaries
 
-- 自動 fetch / WebSocket / Worker は host の境界に合わせる
-- 単発 notification / 効果音を host の effect API 経由で使う
+- No `fetch` / `WebSocket` / `Worker` in current code. If added: go
+  through host's effect API, not directly.
+- `validateExpression` is pure (no I/O). Keep this invariant.
 
 ## Consequences
 
-- host が link path 先に実在しない現在の状態では `bun install` は失敗する
-  (これは host 側 setup の未完了を示しており、本リポジトリの責務ではない)
-- `link:` 依存を採用している以上、このリポジトリ単独では完全な CI が成立しない
-- source が極小なので、過度な architecture を立てると prematurely abstract になる
+- This repo alone cannot be built, linted, type-checked, or tested. The
+  canonical validation entry point lives in `my-web-2025`'s scripts.
+- Moving this repo to a different filesystem path will break the
+  `../../../../src/components/tools-ui/ToolWrapper` import.
+- The `@rebuildup/tool-ae-expression` package name is reserved for
+  in-workspace identification only. Do not publish to npm.
+
+## Reproduction
+
+This ADR's assumptions are satisfied when:
+
+1. `Desktop/tool-ae-expression/` exists as a sibling of
+   `Desktop/my-web-2025/`.
+2. `my-web-2025/src/components/tools-ui/ToolWrapper.tsx` exists.
+3. `my-web-2025`'s `bun run type-check` and `bun run build` traverse
+   this tool's source.
 
 ## Re-evaluation
 
-次のいずれかに該当したら本 ADR を見直す:
+Revisit when:
 
-- `link:../../ui/src` 先の host package が実体化し、API contract が現れた
-- per-tool として独立 release / versioning を行う必要が出た
-- test framework / CI を per-tool 単位で運用する必要が出た
-- このリポジトリが host embed ではなく standalone web app として確定した
+- The embed mechanism changes (e.g. switch to `link:` protocol,
+  monorepo tool, or published package).
+- Tool gains its own persistence layer.
+- A per-tool test runner is required (Vitest in this repo).
+- Host's `ToolWrapper` interface changes in a breaking way.
+- Next.js major version is bumped.
+- This repo's filesystem layout changes (host import path must be
+  updated).
