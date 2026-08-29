@@ -2,4 +2,26 @@ node_modules/
 .next/
 dist/
 .vscode/
+.idea/
 *.log
+npm-debug.log*
+bun-debug.log*
+
+# type-check incremental output
+*.tsbuildinfo
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+
+# validation / debug artifacts (project-local rule)
+.tmp/
+.reference/
+
+# actual dotenv files (only .env*examples are committed)
+.env
+.env.development
+.env.production
+
+# test coverage (when a test framework lands)
+coverage/
