@@ -113,3 +113,10 @@ project-local Skill は `.claude/skills/` 以下。発火条件が明確な単�
 - `docs/adr/0002-architecture.md` — per-tool source-only architecture (revised)
 - `docs/adr/0003-pr-driven-workflow.md` — PR-driven workflow + `main` branch protection
 - `.claude/skills/*.md` — project-local Skills
+
+## Constitution / operating profile
+
+- 最上位 contract: [`constitution/CONSTITUTION.md`](constitution/CONSTITUTION.md)
+- current Operating Model: [`organization/profiles/release-driven-solo.md`](organization/profiles/release-driven-solo.md)
+- 上記 host/source boundary と既存 ADR は、Constitution と両立する限り generic upstream Practice より具体的な authority として維持する。
+- project-init operational Skills は `bunx skills` + `skills-lock.json` で project-local に継続更新する。
