@@ -8,6 +8,15 @@ import {
 	RotateCcw,
 	Save,
 } from "lucide-react";
+import {
+	COLORS,
+	FONT_MONO,
+	FONT_SANS,
+	ICON_SIZE,
+	activeButtonStyle,
+	buttonStyle,
+	panelStyle,
+} from "./ae-expression-theme";
 import type { AEExpression, ValidationResult } from "./ae-expression-types";
 
 interface ExpressionOutputProps {
@@ -38,72 +47,114 @@ export function ExpressionOutput({
 	onCopy,
 }: ExpressionOutputProps) {
 	return (
-		<div className="space-y-4">
-			<div className="flex items-center justify-between">
-				<h2 className="neue-haas-grotesk-display text-xl ">生成されたコード</h2>
-				<div className="flex gap-2">
-					<button
-						type="button"
-						onClick={onTogglePreview}
-						className="px-3 py-2 flex items-center gap-2 noto-sans-jp-light"
-					>
+		<div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+			<div
+				style={{
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "space-between",
+					flexWrap: "wrap",
+					gap: "8px",
+				}}
+			>
+				<h2 style={{ margin: 0, fontSize: "1.25rem", fontFamily: FONT_SANS }}>
+					生成されたコード
+				</h2>
+				<div
+					style={{
+						display: "flex",
+						flexWrap: "wrap",
+						gap: "8px",
+					}}
+				>
+					<button type="button" onClick={onTogglePreview} style={buttonStyle}>
 						{isPreviewPlaying ? (
-							<Pause className="w-4 h-4" />
+							<Pause size={ICON_SIZE} />
 						) : (
-							<Play className="w-4 h-4" />
+							<Play size={ICON_SIZE} />
 						)}
 						{isPreviewPlaying ? "停止" : "再生"}
 					</button>
-					<button
-						type="button"
-						onClick={onResetPreview}
-						className="px-3 py-2 flex items-center gap-2 noto-sans-jp-light"
-					>
-						<RotateCcw className="w-4 h-4" />
+					<button type="button" onClick={onResetPreview} style={buttonStyle}>
+						<RotateCcw size={ICON_SIZE} />
 						リセット
 					</button>
 					<button
 						type="button"
 						onClick={onSave}
 						disabled={!expression || !generatedCode}
-						className="px-3 py-2 flex items-center gap-2 noto-sans-jp-light"
+						style={{
+							...buttonStyle,
+							opacity: !expression || !generatedCode ? 0.5 : 1,
+							cursor: !expression || !generatedCode ? "not-allowed" : "pointer",
+						}}
 					>
-						<Save className="w-4 h-4" />
+						<Save size={ICON_SIZE} />
 						保存
 					</button>
 					<button
 						type="button"
 						onClick={onExport}
 						disabled={!generatedCode}
-						className="px-3 py-2 flex items-center gap-2 noto-sans-jp-light"
+						style={{
+							...buttonStyle,
+							opacity: !generatedCode ? 0.5 : 1,
+							cursor: !generatedCode ? "not-allowed" : "pointer",
+						}}
 					>
-						<Download className="w-4 h-4" />
+						<Download size={ICON_SIZE} />
 						エクスポート
 					</button>
 					<button
 						type="button"
 						onClick={onCopy}
 						disabled={!generatedCode}
-						className={`px-4 py-2 flex items-center gap-2 noto-sans-jp-regular ${copySuccess ? " " : " "}`}
+						style={{
+							...(copySuccess ? activeButtonStyle : buttonStyle),
+							opacity: !generatedCode ? 0.5 : 1,
+							cursor: !generatedCode ? "not-allowed" : "pointer",
+						}}
 					>
 						{copySuccess ? (
-							<CheckCircle className="w-4 h-4" />
+							<CheckCircle size={ICON_SIZE} />
 						) : (
-							<Copy className="w-4 h-4" />
+							<Copy size={ICON_SIZE} />
 						)}
 						{copySuccess ? "コピー完了" : "コピー"}
 					</button>
 				</div>
 			</div>
 			{generatedCode && (
-				<div className="space-y-2">
+				<div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
 					{validationResult.errors.length > 0 && (
-						<div className="   p-3">
-							<div className="flex items-center gap-2 mb-2">
-								<AlertCircle className="w-4 h-4 " />
-								<span className="text-sm noto-sans-jp-regular ">エラー</span>
+						<div
+							style={{
+								padding: "12px",
+								borderRadius: "8px",
+								background: COLORS.dangerSurface,
+								border: `1px solid ${COLORS.danger}`,
+							}}
+						>
+							<div
+								style={{
+									display: "flex",
+									alignItems: "center",
+									gap: "8px",
+									marginBottom: "8px",
+									color: COLORS.danger,
+								}}
+							>
+								<AlertCircle size={ICON_SIZE} />
+								<span style={{ fontSize: "0.875rem" }}>エラー</span>
 							</div>
-							<ul className="text-sm noto-sans-jp-light  space-y-1">
+							<ul
+								style={{
+									margin: 0,
+									paddingLeft: "1.25rem",
+									fontSize: "0.875rem",
+									color: COLORS.danger,
+								}}
+							>
 								{validationResult.errors.map((error) => (
 									<li key={error}>• {error}</li>
 								))}
@@ -111,12 +162,34 @@ export function ExpressionOutput({
 						</div>
 					)}
 					{validationResult.warnings.length > 0 && (
-						<div className="   p-3">
-							<div className="flex items-center gap-2 mb-2">
-								<AlertCircle className="w-4 h-4 " />
-								<span className="text-sm noto-sans-jp-regular ">警告</span>
+						<div
+							style={{
+								padding: "12px",
+								borderRadius: "8px",
+								background: COLORS.warningSurface,
+								border: `1px solid ${COLORS.warning}`,
+							}}
+						>
+							<div
+								style={{
+									display: "flex",
+									alignItems: "center",
+									gap: "8px",
+									marginBottom: "8px",
+									color: COLORS.warning,
+								}}
+							>
+								<AlertCircle size={ICON_SIZE} />
+								<span style={{ fontSize: "0.875rem" }}>警告</span>
 							</div>
-							<ul className="text-sm noto-sans-jp-light  space-y-1">
+							<ul
+								style={{
+									margin: 0,
+									paddingLeft: "1.25rem",
+									fontSize: "0.875rem",
+									color: COLORS.warning,
+								}}
+							>
 								{validationResult.warnings.map((warning) => (
 									<li key={warning}>• {warning}</li>
 								))}
@@ -125,10 +198,24 @@ export function ExpressionOutput({
 					)}
 					{validationResult.isValid &&
 						validationResult.warnings.length === 0 && (
-							<div className="   p-3">
-								<div className="flex items-center gap-2">
-									<CheckCircle className="w-4 h-4 " />
-									<span className="text-sm noto-sans-jp-regular ">
+							<div
+								style={{
+									padding: "12px",
+									borderRadius: "8px",
+									background: COLORS.successSurface,
+									border: `1px solid ${COLORS.success}`,
+								}}
+							>
+								<div
+									style={{
+										display: "flex",
+										alignItems: "center",
+										gap: "8px",
+										color: COLORS.success,
+									}}
+								>
+									<CheckCircle size={ICON_SIZE} />
+									<span style={{ fontSize: "0.875rem" }}>
 										エクスプレッションは正常です
 									</span>
 								</div>
@@ -136,29 +223,53 @@ export function ExpressionOutput({
 						)}
 				</div>
 			)}
-			<div className="rounded-xl  shadow-[0_8px_24px_rgba(0,0,0,0.25)] p-4 min-h-32">
-				<pre className="whitespace-pre-wrap text-sm noto-sans-jp-light leading-relaxed font-mono">
+			<div style={{ ...panelStyle, minHeight: "8rem" }}>
+				<pre
+					style={{
+						margin: 0,
+						whiteSpace: "pre-wrap",
+						fontSize: "0.875rem",
+						lineHeight: 1.7,
+						fontFamily: FONT_MONO,
+						color: COLORS.text,
+					}}
+				>
 					{generatedCode || "エクスプレッションを選択してください..."}
 				</pre>
 			</div>
 			{expression && (
-				<div className="rounded-xl  shadow-[0_8px_24px_rgba(0,0,0,0.25)] p-4">
-					<div className="flex items-center justify-between mb-2">
-						<span className="text-sm noto-sans-jp-regular">プレビュー時間</span>
-						<span className="text-sm noto-sans-jp-light font-mono">
+				<div style={panelStyle}>
+					<div
+						style={{
+							display: "flex",
+							alignItems: "center",
+							justifyContent: "space-between",
+							marginBottom: "8px",
+						}}
+					>
+						<span style={{ fontSize: "0.875rem" }}>プレビュー時間</span>
+						<span style={{ fontSize: "0.875rem", fontFamily: FONT_MONO }}>
 							{previewTime.toFixed(1)}s
 						</span>
 					</div>
-					<div className="text-xs  noto-sans-jp-light">
+					<div style={{ fontSize: "0.75rem", color: COLORS.muted, lineHeight: 1.7 }}>
 						実際のAfter
 						Effectsでは、このエクスプレッションが時間に応じて値を変化させます.
 					</div>
 				</div>
 			)}
 			{expression && (
-				<div className="rounded-xl  shadow-[0_8px_24px_rgba(0,0,0,0.25)] p-4">
-					<h3 className="text-sm noto-sans-jp-regular mb-2">使用例</h3>
-					<pre className="text-xs  noto-sans-jp-light font-mono">
+				<div style={panelStyle}>
+					<h3 style={{ margin: "0 0 8px", fontSize: "0.875rem" }}>使用例</h3>
+					<pre
+						style={{
+							margin: 0,
+							fontSize: "0.75rem",
+							fontFamily: FONT_MONO,
+							whiteSpace: "pre-wrap",
+							color: COLORS.text,
+						}}
+					>
 						{expression.example}
 					</pre>
 				</div>

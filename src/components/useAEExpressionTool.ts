@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { copyTextToClipboard } from "./ae-expression-clipboard";
 import { AE_EXPRESSIONS } from "./ae-expression-data";
+import {
+	readSavedExpressions,
+	writeSavedExpressions,
+} from "./ae-expression-storage";
 import type {
 	AEExpression,
 	ExportFormat,
@@ -63,14 +68,7 @@ export function useAEExpressionTool() {
 	}, [selectedExpression, parameterValues]);
 
 	useEffect(() => {
-		const saved = localStorage.getItem("ae-expressions-saved:v1");
-		if (saved) {
-			try {
-				setSavedExpressions(JSON.parse(saved));
-			} catch (error) {
-				console.error("Failed to load saved expressions:", error);
-			}
-		}
+		setSavedExpressions(readSavedExpressions());
 	}, []);
 
 	useEffect(() => {
@@ -82,7 +80,7 @@ export function useAEExpressionTool() {
 	}, [selectedExpression]);
 
 	useEffect(() => {
-		let interval: NodeJS.Timeout;
+		let interval: ReturnType<typeof setInterval> | undefined;
 		if (isPreviewPlaying)
 			interval = setInterval(
 				() => setPreviewTime((previous) => previous + 0.1),
@@ -116,25 +114,23 @@ export function useAEExpressionTool() {
 		};
 		const updated = [...savedExpressions, savedExpression];
 		setSavedExpressions(updated);
-		localStorage.setItem("ae-expressions-saved:v1", JSON.stringify(updated));
+		writeSavedExpressions(updated);
 	}, [selectedExpression, generatedCode, parameterValues, savedExpressions]);
 
 	const copyToClipboard = useCallback(async () => {
-		try {
-			await navigator.clipboard.writeText(generatedCode);
-			setCopySuccess(true);
-			setTimeout(() => setCopySuccess(false), 2000);
-			if (selectedExpression)
-				setExpressions((previous) =>
-					previous.map((expression) =>
-						expression.id === selectedExpression.id
-							? { ...expression, usageCount: (expression.usageCount || 0) + 1 }
-							: expression,
-					),
-				);
-		} catch (error) {
-			console.error("Failed to copy to clipboard:", error);
-		}
+		const copied = await copyTextToClipboard(generatedCode);
+		if (!copied) return;
+
+		setCopySuccess(true);
+		setTimeout(() => setCopySuccess(false), 2000);
+		if (selectedExpression)
+			setExpressions((previous) =>
+				previous.map((expression) =>
+					expression.id === selectedExpression.id
+						? { ...expression, usageCount: (expression.usageCount || 0) + 1 }
+						: expression,
+				),
+			);
 	}, [generatedCode, selectedExpression]);
 
 	const exportExpression = useCallback(() => {

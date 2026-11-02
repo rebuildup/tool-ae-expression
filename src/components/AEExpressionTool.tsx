@@ -1,10 +1,10 @@
 "use client";
 
-import ToolWrapper from "../../../../src/components/tools-ui/ToolWrapper";
 import { ExpressionControls } from "./ExpressionControls";
 import { ExpressionList } from "./ExpressionList";
 import { ExpressionOutput } from "./ExpressionOutput";
 import { ExpressionParameters } from "./ExpressionParameters";
+import ToolWrapper from "./ToolWrapper";
 import { useAEExpressionTool } from "./useAEExpressionTool";
 
 export default function AEExpressionTool() {
@@ -16,7 +16,7 @@ export default function AEExpressionTool() {
 			description="AfterEffectsのエクスプレッションをScratch風ブロックUIで簡単に設定.アニメーション、エフェクト、変形などのエクスプレッションを一覧表示."
 			category="Design"
 		>
-			<div className="space-y-8">
+			<div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
 				<ExpressionControls
 					searchTerm={tool.searchTerm}
 					setSearchTerm={tool.setSearchTerm}
@@ -35,7 +35,14 @@ export default function AEExpressionTool() {
 					savedExpressions={tool.savedExpressions}
 					setSavedExpressions={tool.setSavedExpressions}
 				/>
-				<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+				<div
+					style={{
+						display: "grid",
+						gridTemplateColumns: "repeat(auto-fit, minmax(18rem, 1fr))",
+						gap: "32px",
+						alignItems: "start",
+					}}
+				>
 					<ExpressionList
 						expressions={tool.filteredExpressions}
 						selectedExpression={tool.selectedExpression}

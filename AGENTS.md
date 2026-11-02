@@ -6,31 +6,35 @@ AI コーディングエージェント向けの canonical project contract (dis
 - **Repo name**: `tool-ae-expression` (GitHub repo)
 - **Package name**: `@rebuildup/tool-ae-expression` (private npm name; never
   published — reserved for in-workspace identification only)
-- **Role**: per-tool source-only repo for one tool (After Effects
-  Expression Helper) embedded into the `my-web-2025` host app via
-  filesystem-relative import.
+- **Role**: per-tool repo for one tool (After Effects Expression Helper).
+  It builds a **standalone static SPA** (`dist/`) that the `my-web-2026`
+  Tool Registry embeds as a `same_origin_static` iframe
+  (`sandbox="allow-scripts"`).
 - **License**: MIT (Copyright samuido 2026)
 - **Remote**: `github.com/rebuildup/tool-ae-expression`
 - **Boundaries**:
   - Source under `src/` is owned by this repo.
-  - Host app source (`my-web-2025/src/components/tools-ui/`) is owned by
-    `my-web-2025`, **not** this repo.
-  - Embed mechanism is filesystem-relative
-    (`../../../../src/components/tools-ui/ToolWrapper`), **not** npm
-    `link:` and **not** registry publishing.
-  - Layout requirement: this repo must live at `Desktop/tool-ae-expression/`
-    as a sibling of `Desktop/my-web-2025/`.
+  - The tool owns its own shell (`src/components/ToolWrapper.tsx`). It
+    must **not** import from a host repository (`../../../../src/...`).
+  - The tool must **not** import `next/*`. Host routes (`/`, `/tools`)
+    are rendered as **text**, never as links, so a framed document cannot
+    navigate the frame away from the Tool.
+  - Third-party origins: **0**. No web font, no CDN, no fetch.
+  - Embed mechanism is the **built artefact**, **not** npm `link:` and
+    **not** registry publishing.
+  - Layout requirement: **none**. This repo builds standalone
+    (ADR 0004).
 
 ## Toolchain (project-local)
 
-- **Language**: TypeScript (strict; declared in source, validated by host)
+- **Language**: TypeScript (strict; `tsconfig.json` owned by this repo)
 - **UI**: React 19 + react-dom 19
 - **Icons**: `lucide-react`
-- **Runtime target**: Next.js 16 (peer; provided by host)
-- **Package manager / build / lint / test**: lives in host
-  (`my-web-2025`); this repo has **no** `package.json` scripts, **no**
-  committed lockfile, **no** `tsconfig.json`, **no** formatter/lint config
-  by design (ADR 0001 § Decision).
+- **Runtime target**: browser SPA (no Next.js peer dependency)
+- **Package manager**: **pnpm** (committed `pnpm-lock.yaml`)
+- **Build**: **Vite 7** (`pnpm run build` → `dist/`; `base: "./"`)
+- **Type check**: `pnpm run type-check` (`tsc --noEmit`)
+- **Lint / test**: not configured yet (known debt, ADR 0001)
 
 詳細決定は `docs/adr/0001-toolchain.md` を参照。
 
@@ -54,20 +58,17 @@ AI コーディングエージェント向けの canonical project contract (dis
 
 ## Validation entry point
 
-このリポジトリ単体に build / lint / test pipeline は**存在しない** (ADR 0001)。
-canonical 検証は host (`my-web-2025`) 側で行う:
+このリポジトリは**単体で build / type-check できる** (ADR 0004)。
+canonical 検証はこの repo 内で完結する:
 
 ```
-cd ../my-web-2025
-bun install --frozen-lockfile
-bun run type-check
-bun run lint
-bun run build
-bun run test
+pnpm install --frozen-lockfile
+pnpm run type-check
+pnpm run build
 ```
 
-host 側の toolchain がこの tool の source を filesystem traversal で
-カバーする。host の CI が green であればこの tool も green。
+`dist/` は commit しない。host 側での実ブラウザ iframe 埋め込み検証は
+host の責務 (`my-web-2026` Issue #773)。
 詳細は `.claude/skills/validate.md` を参照。
 
 ## Skill discovery
@@ -110,8 +111,9 @@ project-local Skill は `.claude/skills/` 以下。発火条件が明確な単�
 - `README.md` — public overview (English)
 - `docs/DEVELOPMENT.md` — internal development guide (日本語)
 - `docs/adr/0001-toolchain.md` — AI agent toolchain decision (revised)
-- `docs/adr/0002-architecture.md` — per-tool source-only architecture (revised)
+- `docs/adr/0002-architecture.md` — standalone Tool repo architecture (revised)
 - `docs/adr/0003-pr-driven-workflow.md` — PR-driven workflow + `main` branch protection
+- `docs/adr/0004-standalone-embed-build.md` — standalone build + same-origin iframe embed
 - `.claude/skills/*.md` — project-local Skills
 
 ## Constitution / operating profile
@@ -120,3 +122,5 @@ project-local Skill は `.claude/skills/` 以下。発火条件が明確な単�
 - current Operating Model: [`organization/profiles/release-driven-solo.md`](organization/profiles/release-driven-solo.md)
 - 上記 host/source boundary と既存 ADR は、Constitution と両立する限り generic upstream Practice より具体的な authority として維持する。
 - project-init operational Skills は `bunx skills` + `skills-lock.json` で project-local に継続更新する。
+- **Tool の埋め込み前提**（iframe 内での storage / clipboard / 外部 origin）は
+  この repo の責務であり、host に依存しない (ADR 0004)。

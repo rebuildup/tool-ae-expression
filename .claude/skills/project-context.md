@@ -19,34 +19,42 @@ description: Use when starting any task in tool-ae-expression to confirm the cur
 
 - Repo: `tool-ae-expression`
 - Package: `@rebuildup/tool-ae-expression` (private)
-- Owner: rebuildup (per-tool workspace under `my-web-2025` host)
-- Runtime: Next.js 16 (peer) + React 19 + TypeScript
+- Owner: rebuildup (per-tool repo; built artefact is embedded by the
+  `my-web-2026` Tool Registry as a `same_origin_static` iframe)
+- Runtime: browser SPA (React 19 + TypeScript); build は Vite 7
 - Icons: `lucide-react`
-- Package manager: Bun (host-managed; no committed lockfile here)
-- Lint / format: Biome (host-managed; no config here)
+- Package manager: pnpm (committed `pnpm-lock.yaml`)
+- Lint / format: 未設定 (known debt, ADR 0001)
 - Remote: `github.com/rebuildup/tool-ae-expression`
 - License: MIT
-- Source surface: ~1320 LOC across `src/`
+- Source surface: ~1500 LOC across `src/`
 
 ## Layout
 
 | 場所 | 役割 |
 | --- | --- |
+| `index.html` | standalone SPA の entry document (`#root`) |
 | `src/index.ts` | public re-export (host の embed entry point) |
-| `src/AeExpressionApp.tsx` | Next.js page-level entry (Breadcrumb + tool) |
-| `src/components/AEExpressionTool.tsx` | tool root; host の `ToolWrapper` を使用 |
+| `src/main.tsx` | standalone SPA の mount (createRoot + StrictMode) |
+| `src/AeExpressionApp.tsx` | app shell (breadcrumb はテキスト描画) |
+| `src/components/AEExpressionTool.tsx` | tool root; この repo の `ToolWrapper` を使用 |
+| `src/components/ToolWrapper.tsx` | この repo が所有する shell |
 | `src/components/ExpressionControls.tsx` | search / filter / preferences UI |
 | `src/components/ExpressionList.tsx` | 選択可能式 expression 一覧 |
 | `src/components/ExpressionParameters.tsx` | パラメータ入力 |
 | `src/components/ExpressionOutput.tsx` | 生成コード + validation + preview |
 | `src/components/useAEExpressionTool.ts` | state hook (tool-local state 全部) |
+| `src/components/ae-expression-storage.ts` | localStorage + メモリ fallback |
+| `src/components/ae-expression-clipboard.ts` | clipboard + `execCommand` fallback |
+| `src/components/ae-expression-theme.ts` | inline style 用の design token |
 | `src/components/ae-expression-data.ts` | static expression 定義 |
 | `src/components/ae-expression-types.ts` | domain types |
 | `src/components/ae-expression-utils.ts` | filtering / generation / validation |
 | `docs/DEVELOPMENT.md` | 開発手順 (日本語) |
 | `docs/adr/0001-toolchain.md` | AI agent toolchain 決定 (revised) |
-| `docs/adr/0002-architecture.md` | per-tool source-only architecture (revised) |
+| `docs/adr/0002-architecture.md` | standalone Tool repo architecture (revised) |
 | `docs/adr/0003-pr-driven-workflow.md` | PR-driven workflow + main protection |
+| `docs/adr/0004-standalone-embed-build.md` | standalone build + iframe 埋め込み契約 |
 | `.claude/skills/` | project-local Skills |
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR テンプレート |
 | `.github/branch-protection.json` | branch protection rule の source of truth |
@@ -58,34 +66,33 @@ description: Use when starting any task in tool-ae-expression to confirm the cur
 | 対象 | Owner |
 | --- | --- |
 | `src/**` | tool-ae-expression |
-| `package.json` | tool-ae-expression (name / deps / peerDeps のみ) |
+| `package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml` | tool-ae-expression |
+| `tsconfig.json` / `vite.config.ts` / `index.html` | tool-ae-expression |
 | `docs/**` (ADR, dev doc) | tool-ae-expression |
 | `.claude/**` | tool-ae-expression |
 | `.github/PULL_REQUEST_TEMPLATE.md` / `branch-protection.json` | tool-ae-expression |
-| `ToolWrapper` (`my-web-2025/src/components/tools-ui/ToolWrapper.tsx`) | `my-web-2025` — このリポジトリでは **触らない** |
-| host app の routing / state / design system | `my-web-2025` |
-| build / lint / type-check / test pipeline | `my-web-2025` |
-| `bun.lock` | `my-web-2025` |
-| `tsconfig.json` / `biome.json` | `my-web-2025` |
+| host app の routing / state / design system | host (`my-web-2026`) — このリポジトリでは **触らない** |
+| Tool Registry manifest / delivery 設定 | host (`my-web-2026`) — Issue #773 |
 
 ## Boundaries
 
-- 単一 source-only repo として host の filesystem traversal で評価される
-- host に embed される前提だが、host 側の source は触らない
-- per-tool 単体での release / versioning は行わない (host の lockfile に
-  従属)
-- per-tool 単体に build / lint / test pipeline は持たない (ADR 0001)
+- standalone に build できる per-tool repo (ADR 0004)。host には build 済み
+  artefact (`dist/`) を同一 origin 配下で配信する artefact として統合される
+- host 側の source は触らない。host への import (`next/*` /
+  `../../../../src/...`) を新たに持ち込まない
+- host ルート (`/` / `/tools`) はテキスト描画。iframe 内で link を辿ると
+  frame が host へ遷移するため
+- per-tool 単体の release / versioning は行わない
 - CI / release workflow を勝手に追加しない
-- sibling layout (`Desktop/tool-ae-expression/` の隣に
-  `Desktop/my-web-2025/`) を維持しないと host からの import が壊れる
 
 ## Reading order when unsure
 
 1. `docs/DEVELOPMENT.md` — 何が動く状態かの最新 ground truth
-2. `docs/adr/0002-architecture.md` — 責務 / 依存方向 / sibling layout 制約
-3. `docs/adr/0001-toolchain.md` — tool 採否 (host 側 toolchain の参照)
-4. `docs/adr/0003-pr-driven-workflow.md` — PR-driven + main protection
-5. `AGENTS.md` — dispatcher (不変条件)
+2. `docs/adr/0004-standalone-embed-build.md` — standalone build と埋め込み契約
+3. `docs/adr/0002-architecture.md` — 責務 / 依存方向
+4. `docs/adr/0001-toolchain.md` — tool 採否 (この repo が所有する toolchain)
+5. `docs/adr/0003-pr-driven-workflow.md` — PR-driven + main protection
+6. `AGENTS.md` — dispatcher (不変条件)
 
 ADR 同士の前後関係 (supersede / revise / 無効化) は各 ADR 先頭の
 `Status:` / `Supersedes:` / `Revision:` 行で確認する。

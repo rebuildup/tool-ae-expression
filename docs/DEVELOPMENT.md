@@ -2,50 +2,49 @@
 
 AI コーディングエージェントおよび contributor 向けの internal development guide。
 source コードは英語、本ドキュメントは日本語。役割分担の正本は ADR
-(`docs/adr/0001-toolchain.md`、`docs/adr/0002-architecture.md`)。
+(`docs/adr/0001-toolchain.md`、`docs/adr/0002-architecture.md`、
+`docs/adr/0004-standalone-embed-build.md`)。
 
 ## 概要
 
-- **役割**: `my-web-2025` host app に embed される per-tool の Next.js
-  source-only repo
+- **役割**: `my-web-2026` の Tool Registry が同一 origin 配下で配信する
+  **standalone static SPA**（per-tool repo）
 - **リポジトリ名**: `tool-ae-expression`
 - **package 名**: `@rebuildup/tool-ae-expression` (private, 未公開)
 - **License**: MIT (Copyright samuido 2026)
-- **Runtime**: Next.js 16 (peer, host 提供) + React 19 + TypeScript
+- **Runtime**: browser SPA (React 19 + TypeScript) / build は Vite 7
 - **UI icons**: `lucide-react`
-- **Validation**: host (`my-web-2025`) 側で実施
+- **Package manager**: pnpm（`pnpm-lock.yaml` を commit）
+- **Validation**: このリポジトリ単体で実施する
 
 ## 前提
 
-- `my-web-2025` リポジトリが sibling として存在すること
-  (filesystem-relative import のため)
-- host toolchain: Bun + Next.js 16 + React 19 + Biome
 - 任意の OS: Windows + Git Bash / WSL / Linux / macOS
+- Node.js + pnpm 12 系
+
+host リポジトリの sibling 配置は不要になった (ADR 0004)。
 
 ## 初回 setup
 
-このリポジトリ単独では `bun install` は実行しない。host 側で setup する:
-
 ```sh
-cd ../my-web-2025
-bun install
+pnpm install
 ```
 
-host の `tsc --noEmit` / Biome / Next build がこの tool の source を
-traverse する形で validation する。
+`pnpm-lock.yaml` を commit しているため、CI / host 側では
+`pnpm install --frozen-lockfile` を使う。
 
 ## 開発 loop
 
 ```sh
-# 1. host の dev server を起動 (tool の source を hot-reload で見れる)
-cd ../my-web-2025
-bun run dev
+# 1. 開発 server
+pnpm run dev
 
-# 2. host 側で validation を流す
-bun run type-check
-bun run lint
-bun run build
-bun run test
+# 2. validation
+pnpm run type-check
+pnpm run build
+
+# 3. build 結果の確認
+pnpm run preview
 ```
 
 ## ディレクトリ規約
@@ -53,9 +52,15 @@ bun run test
 | 場所 | 役割 |
 | --- | --- |
 | `src/` | per-tool source |
+| `index.html` | standalone SPA の entry document (`#root`) |
 | `src/index.ts` | public re-export (host から import される entry point) |
-| `src/AeExpressionApp.tsx` | Next.js page-level entry (Breadcrumb + tool 読み込み) |
-| `src/components/AEExpressionTool.tsx` | tool root、host の `ToolWrapper` を使用 |
+| `src/main.tsx` | standalone SPA の mount (createRoot + StrictMode) |
+| `src/AeExpressionApp.tsx` | app shell (breadcrumb はテキスト描画) |
+| `src/components/AEExpressionTool.tsx` | tool root、この repo の `ToolWrapper` を使用 |
+| `src/components/ToolWrapper.tsx` | この repo が所有する shell (host の値を代替) |
+| `src/components/ae-expression-storage.ts` | localStorage アクセス + メモリ fallback |
+| `src/components/ae-expression-clipboard.ts` | clipboard アクセス + `execCommand` fallback |
+| `src/components/ae-expression-theme.ts` | inline style 用の design token |
 | `src/components/ExpressionControls.tsx` | search / filter / preferences UI |
 | `src/components/ExpressionList.tsx` | 選択可能式 expression 一覧 |
 | `src/components/ExpressionParameters.tsx` | パラメータ入力 |
@@ -82,21 +87,24 @@ generic dumping-ground ではない。
 
 ## 検証 (canonical quality gate)
 
-実装 task 完了直前に必ず host 側で以下を green にする。skip / ignore /
+実装 task 完了直前に必ず以下を green にする。skip / ignore /
 suppression 禁止。
 
 ```sh
-cd ../my-web-2025
-bun install --frozen-lockfile
-bun run type-check
-bun run lint
-bun run build
-bun run test
+pnpm install --frozen-lockfile
+pnpm run type-check
+pnpm run build
 ```
 
-host の CI が green であればこの tool も green。tool 単体に閉じた
-validation pipeline は存在しない。詳細は `.claude/skills/validate.md` および
-`docs/adr/0001-toolchain.md` § Decision を参照。
+追加で目視確認する点:
+
+- `dist/index.html` の asset 参照が `./assets/...`（相対）であること
+- `dist/` が commit 対象に入っていないこと
+- `grep -rn "next/" src/` が 0 件であること
+
+host 側での実ブラウザ iframe 埋め込み検証は host の責務
+(`my-web-2026` Issue #773)。詳細は `.claude/skills/validate.md` および
+`docs/adr/0004-standalone-embed-build.md` を参照。
 
 ## 言語ポリシー
 
@@ -117,19 +125,12 @@ validation pipeline は存在しない。詳細は `.claude/skills/validate.md` 
 - error / warning / skip を suppression で隠さない。root cause を直す。
 - user-requested scope を勝手に MVP へ縮小しない。
 
-## 現状の known debt (per-tool 単体では解決しないもの)
+## 現状の known debt
 
-- **sibling layout 依存**: `src/components/AEExpressionTool.tsx` の
-  `../../../../src/components/tools-ui/ToolWrapper` import は
-  `Desktop/tool-ae-expression/` が `Desktop/my-web-2025/` の sibling
-  という layout を前提とする fragile coupling。layout が変わると
-  import path の修正が必要 (ADR 0002 § Dependency direction)。
-- **永続化なし**: `useAEExpressionTool` 内の `savedExpressions` は
-  in-memory のみで永続化されない。永続化が必要になったら host の
-  storage adapter 経由で実装する (ADR 0002 § Persistence boundaries)。
-- **per-tool 設定なし**: `tsconfig.json` / `biome.json` / `package.json`
-  scripts は host (`my-web-2025`) が所有し、この repo には存在しない
-  (ADR 0001)。per-tool 設定を追加する場合は host と重複しないよう
-  慎重に設計する。
-- **per-tool test framework 未導入**: host の test runner に統合する形で
-  追加する。per-repo Vitest は host と重複するため避ける。
+- **lint / test 未導入**: この repo に Biome / Vitest の設定がまだ無い。
+  host の lint / test はこの repo の source を traverse しないため、
+  必要になった時点で host と重複しない形で導入する (ADR 0001)。
+- **export (download)**: iframe の sandbox に `allow-downloads` が無い
+  場合、browser がダウンロードを落とす。host 側の manifest 判断事項。
+- **実ブラウザ未検証**: standalone build の実ブラウザ / iframe 内
+  操作は未検証 (host 側 Issue #773 の責務)。

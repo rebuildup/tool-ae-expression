@@ -1,6 +1,6 @@
 ---
 name: validate
-description: Use when finishing any implementation task in tool-ae-expression — runs the canonical quality gate end-to-end via the host app's toolchain and reports pass/fail with the exact command output. Triggers on "validate", "run checks", "is it green", "quality gate", "everything passes", or any task ending step.
+description: Use when finishing any implementation task in tool-ae-expression — runs the canonical quality gate end-to-end in this repository and reports pass/fail with the exact command output. Triggers on "validate", "run checks", "is it green", "quality gate", "everything passes", or any task ending step.
 ---
 
 # validate
@@ -9,9 +9,8 @@ description: Use when finishing any implementation task in tool-ae-expression �
 `AGENTS.md` の validation entry point を具体コマンド列へ展開し、
 skip / ignore / suppression を残さずに合格させる。
 
-この repo は **per-tool source-only** であり build / lint / type-check /
-test pipeline を持たない (ADR 0001)。validation は **host
-(`my-web-2025`) 側** で実行する。
+この repo は **standalone に build できる** (ADR 0004)。validation は
+**この repo 単体** で実行する。
 
 ## When to use
 
@@ -22,83 +21,79 @@ test pipeline を持たない (ADR 0001)。validation は **host
 
 ## Canonical command sequence
 
-host (`my-web-2025`) 側の scripts を順に実行する。各 step は前の step が
-green でないと意味がない。`cd ../my-web-2025` で sibling に移動してから
-host の commands を直接叩く:
+この repo の scripts を順に実行する。各 step は前の step が green で
+ないと意味がない。
 
 ```sh
-# sibling の host に移動
-cd ../my-web-2025
-
 # 1) install (lockfile 変更があれば commit 前)
-bun install --frozen-lockfile
+pnpm install --frozen-lockfile
 
-# 2) type check (host)
-bun run type-check
+# 2) type check
+pnpm run type-check
 
-# 3) formatter / lint (host)
-bun run lint
-
-# 4) build (host)
-bun run build
-
-# 5) tests (host)
-bun run test
+# 3) build
+pnpm run build
 ```
 
-`my-web-2025` の host toolchain がこの tool の source を filesystem
-traversal でカバーする。host の CI が green であればこの tool も green。
+build 後に目視確認する:
+
+```sh
+# asset 参照が相対であること
+grep -o 'src="[^"]*"' dist/index.html
+
+# next import が 0 件であること
+grep -rn "next/" src/
+
+# host リポジトリへの相対 import が無いこと
+grep -rn "\.\./\.\./\.\./\.\./" src/
+
+# dist が commit 対象に入っていないこと
+git status --short
+```
 
 ## Pre-flight checks
 
 実行前に次を確認:
 
-1. `my-web-2025` が sibling として存在するか
-   (`ls ../my-web-2025/package.json` で確認)。無ければ host 側 setup が
-   完了していない。
-2. `my-web-2025` の `package.json` scripts に上記 5 step が全て存在するか
-   (ADR 0001 を満たす前提)。
-3. `my-web-2025/src/components/tools-ui/ToolWrapper.tsx` が存在するか。
-   import 経路の前提条件。
-4. host package の `tsconfig.json` がこの repo の source をカバーするか
-   (host の `include` 設定に依存)。
-5. host 側で `bun install` 済みか。`node_modules` が無ければ 1) を最初に
-   1 回だけ実行。
+1. `pnpm` が使えること (Node.js + pnpm 12 系)。
+2. `pnpm-lock.yaml` が commit 済みであること。lockfile をした結果
+   だけ commit する。
+3. `src/` に `next/` の import と host リポジトリへの相対 import が
+   無いこと。
 
 ## Post-conditions
 
 合格条件:
 
 - 全 step の exit code が 0
-- Biome / TypeScript / Next.js から actionable warning が出ていない
+- TypeScript / Vite から actionable warning が出ていない
   (suppressed でなく、出ていない)
+- `dist/index.html` の asset 参照が相対 (`./assets/...`)
+- `dist/` が commit されていない
 - skip / `.only` / blanket ignore / warning suppression を使っていない
 - scope を縮小していない (要求された全範囲が動作している)
 
 不合格時の対処:
 
 1. 失敗 step を 1 個だけ直す (chercherry-picking で判明する)
-2. 同じ fix を `bun run type-check` まで繰り返し上流から流す
+2. 同じ fix を `pnpm run type-check` まで繰り返し上流から流す
 3. blanket な `--no-warn` / ignore / skip を入れない
 4. 必要なら該当 ADR / dev doc を更新する
-5. tool 単独の pipeline  を追加したくなる誘惑に負けない — 必ず host 側で
-   直す (ADR 0001)
+5. host 側の都合で本 repo の source を host に依存させない (ADR 0004)
 
 ## ADR / doc references
 
-- `docs/adr/0001-toolchain.md` — host 側 toolchain への参照、per-tool
-  pipeline を持たない理由
-- `docs/adr/0002-architecture.md` — sibling layout 制約、embed 経路
+- `docs/adr/0001-toolchain.md` — この repo が所有する toolchain
+- `docs/adr/0002-architecture.md` — standalone Tool repo の architecture
 - `docs/adr/0003-pr-driven-workflow.md` — PR-driven + main protection
+- `docs/adr/0004-standalone-embed-build.md` — standalone build と iframe 埋め込み契約
 - `docs/DEVELOPMENT.md` — 詳細手順
 
 ## Anti-patterns
 
 - `|| true` で exit code を握り潰す
 - ignore / suppress を追加して lint を green に見せる
-- tool 単体に `tsconfig.json` / `biome.json` / `package.json` scripts を
-  追加して host と重複させる (ADR 0001)
-- `bun run build` を skip して type-check だけ緑にする (commit の意味が消える)
-- `bun run test` だけが緑なら満足し、type-check を走らせない
-- sibling layout を崩したまま validation を強行する (host の import が
-  解決できない)
+- `pnpm run build` を skip して type-check だけ緑にする (commit の意味が消える)
+- `dist/` を commit する
+- host への相対 import や `next` import を reinstate する
+- 実ブラウザ / iframe 内の操作を未検証のまま「動作する」と報告する

@@ -1,5 +1,16 @@
 import { BookOpen, Heart, Search, Settings, Trash2 } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
+import { writeSavedExpressions } from "./ae-expression-storage";
+import {
+	COLORS,
+	FONT_SANS,
+	ICON_SIZE,
+	activeButtonStyle,
+	buttonStyle,
+	inputStyle,
+	panelStyle,
+	selectStyle,
+} from "./ae-expression-theme";
 import type { ExportFormat, SavedExpression } from "./ae-expression-types";
 
 interface ExpressionControlsProps {
@@ -25,27 +36,44 @@ export function ExpressionControls(props: ExpressionControlsProps) {
 	const deleteSaved = (id: string) => {
 		const updated = props.savedExpressions.filter((saved) => saved.id !== id);
 		props.setSavedExpressions(updated);
-		localStorage.setItem("ae-expressions-saved:v1", JSON.stringify(updated));
+		writeSavedExpressions(updated);
 	};
 
 	return (
-		<div className="space-y-4">
-			<div className="flex flex-wrap gap-4 items-center">
-				<div className="relative flex-1 min-w-64">
-					<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 " />
+		<div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+			<div
+				style={{
+					display: "flex",
+					flexWrap: "wrap",
+					gap: "16px",
+					alignItems: "center",
+				}}
+			>
+				<div style={{ position: "relative", flex: 1, minWidth: "16rem" }}>
+					<Search
+						size={ICON_SIZE}
+						style={{
+							position: "absolute",
+							left: "12px",
+							top: "50%",
+							transform: "translateY(-50%)",
+							color: COLORS.subtle,
+							pointerEvents: "none",
+						}}
+					/>
 					<input
 						type="text"
 						placeholder="エクスプレッション、タグ、テンプレートを検索..."
 						value={props.searchTerm}
 						onChange={(e) => props.setSearchTerm(e.target.value)}
 						aria-label="エクスプレッション、タグ、テンプレートを検索"
-						className="w-full pl-10 pr-4 py-2"
+						style={{ ...inputStyle, paddingLeft: "40px", paddingRight: "16px" }}
 					/>
 				</div>
 				<select
 					value={props.selectedCategory}
 					onChange={(e) => props.setSelectedCategory(e.target.value)}
-					className="px-4 py-2"
+					style={selectStyle}
 					aria-label="カテゴリで絞り込み"
 				>
 					<option value="all">全カテゴリ</option>
@@ -57,7 +85,7 @@ export function ExpressionControls(props: ExpressionControlsProps) {
 				<select
 					value={props.selectedDifficulty}
 					onChange={(e) => props.setSelectedDifficulty(e.target.value)}
-					className="px-4 py-2"
+					style={selectStyle}
 					aria-label="難易度で絞り込み"
 				>
 					<option value="all">全難易度</option>
@@ -68,9 +96,10 @@ export function ExpressionControls(props: ExpressionControlsProps) {
 				<button
 					type="button"
 					onClick={() => props.setShowFavoritesOnly(!props.showFavoritesOnly)}
-					className={`px-4 py-2 flex items-center gap-2 noto-sans-jp-light ${props.showFavoritesOnly ? " " : " "}`}
+					style={props.showFavoritesOnly ? activeButtonStyle : buttonStyle}
+					aria-pressed={props.showFavoritesOnly}
 				>
-					<Heart className="w-4 h-4" />
+					<Heart size={ICON_SIZE} />
 					お気に入りのみ
 				</button>
 				<button
@@ -78,20 +107,36 @@ export function ExpressionControls(props: ExpressionControlsProps) {
 					onClick={() =>
 						props.setShowAdvancedSettings(!props.showAdvancedSettings)
 					}
-					className="px-4 py-2 flex items-center gap-2 noto-sans-jp-light"
+					style={buttonStyle}
+					aria-pressed={props.showAdvancedSettings}
 				>
-					<Settings className="w-4 h-4" />
+					<Settings size={ICON_SIZE} />
 					詳細設定
 				</button>
 			</div>
 			{props.showAdvancedSettings && (
-				<div className="rounded-xl  shadow-[0_8px_24px_rgba(0,0,0,0.25)] p-4 space-y-4">
-					<h3 className="text-lg noto-sans-jp-regular font-medium">詳細設定</h3>
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div className="space-y-2">
+				<div
+					style={{
+						...panelStyle,
+						display: "flex",
+						flexDirection: "column",
+						gap: "16px",
+					}}
+				>
+					<h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 500 }}>
+						詳細設定
+					</h3>
+					<div
+						style={{
+							display: "grid",
+							gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
+							gap: "16px",
+						}}
+					>
+						<div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
 							<label
 								htmlFor="export-format"
-								className="text-sm noto-sans-jp-regular"
+								style={{ fontSize: "0.875rem", fontFamily: FONT_SANS }}
 							>
 								エクスポート形式
 							</label>
@@ -101,48 +146,84 @@ export function ExpressionControls(props: ExpressionControlsProps) {
 								onChange={(e) =>
 									props.setExportFormat(e.target.value as ExportFormat)
 								}
-								className="w-full px-3 py-2"
+								style={inputStyle}
 							>
 								<option value="txt">テキスト (.txt)</option>
 								<option value="jsx">JSX (.jsx)</option>
 								<option value="json">JSON (.json)</option>
 							</select>
 						</div>
-						<div className="space-y-2">
-							<h4 className="text-sm noto-sans-jp-regular">表示オプション</h4>
+						<div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+							<h4 style={{ margin: 0, fontSize: "0.875rem", fontFamily: FONT_SANS }}>
+								表示オプション
+							</h4>
 							<button
 								type="button"
 								onClick={() =>
 									props.setShowDocumentation(!props.showDocumentation)
 								}
-								className={`px-3 py-2 flex items-center gap-2 noto-sans-jp-light ${props.showDocumentation ? " " : " "}`}
+								style={props.showDocumentation ? activeButtonStyle : buttonStyle}
+								aria-pressed={props.showDocumentation}
 							>
-								<BookOpen className="w-4 h-4" />
+								<BookOpen size={ICON_SIZE} />
 								ドキュメント
 							</button>
 						</div>
 					</div>
 					{props.savedExpressions.length > 0 && (
-						<div className="space-y-2">
-							<h4 className="text-sm noto-sans-jp-regular">
+						<div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+							<h4 style={{ margin: 0, fontSize: "0.875rem", fontFamily: FONT_SANS }}>
 								保存済みエクスプレッション
 							</h4>
-							<div className="max-h-32 overflow-y-auto rounded-lg p-2 space-y-1">
+							<div
+								style={{
+									maxHeight: "8rem",
+									overflowY: "auto",
+									borderRadius: "8px",
+									padding: "8px",
+									display: "flex",
+									flexDirection: "column",
+									gap: "4px",
+									background: COLORS.surfaceMuted,
+								}}
+							>
 								{props.savedExpressions.map((saved) => (
 									<div
 										key={saved.id}
-										className="flex items-center justify-between p-2 rounded-lg"
+										style={{
+											display: "flex",
+											alignItems: "center",
+											justifyContent: "space-between",
+											gap: "8px",
+											padding: "8px",
+											borderRadius: "8px",
+										}}
 									>
-										<span className="text-sm noto-sans-jp-light truncate">
+										<span
+											style={{
+												fontSize: "0.875rem",
+												overflow: "hidden",
+												textOverflow: "ellipsis",
+												whiteSpace: "nowrap",
+											}}
+										>
 											{saved.name}
 										</span>
 										<button
 											type="button"
 											onClick={() => deleteSaved(saved.id)}
-											className=""
+											style={{
+												display: "inline-flex",
+												alignItems: "center",
+												background: "none",
+												border: "none",
+												padding: "4px",
+												cursor: "pointer",
+												color: COLORS.muted,
+											}}
 											aria-label={`保存済み「${saved.name}」を削除`}
 										>
-											<Trash2 className="w-4 h-4" />
+											<Trash2 size={ICON_SIZE} />
 										</button>
 									</div>
 								))}
