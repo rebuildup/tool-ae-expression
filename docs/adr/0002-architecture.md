@@ -1,83 +1,73 @@
-# ADR 0002 — Architecture: per-tool source-only repo (revised)
+# ADR 0002 — Architecture: standalone Tool repo (revised)
 
-- Status: Revised (2026-08-29)
+- Status: Revised (2026-11-03)
 - Date: 2026-08-29
-- Supersedes: the original "Vite standalone" assumption documented in
-  this ADR's prior version and in `AGENTS.md` Toolchain section before
-  PR #1. The previous "the host machine has no `ui/src` link target"
-  claim was wrong — `my-web-2025` IS present at `Desktop/my-web-2025/`
-  and the embed model is filesystem-relative import, not package
-  linking.
-- Revision: 2026-08-29 — revised to match the Next.js consumer model
-  introduced by PR #1 (`feat: migrate AE Expression sources from
-  my-web-2025`).
+- Revision: 2026-11-03 — ADR 0004 の決定に伴い、per-tool **source-only
+  repo**（host が filesystem-relative import するモデル）から、
+  **standalone static SPA を build して host が同一 origin 配下で配信する
+  モデル**へ移行した。host への相対 import・sibling layout 前提は
+  廃止する。
 
 ## Context
 
-This repository is a **per-tool source-only repo** that contributes one
-tool (`tool-ae-expression`) to the host application (`my-web-2025`).
-PR #1 migrated the actual React/Next.js implementation from
-`my-web-2025`'s monorepo into this repo.
+この repo は 1 つの Tool（After Effects Expression Helper）を所有する
+per-tool repo である。ADR 0004 適用後の実測事実:
 
-Observed facts after PR #1:
-
-- `package.json` declares `@rebuildup/tool-ae-expression` as a `private`
-  package with `main` / `types` / `exports` all pointing at
-  `./src/index.ts`. No Vite, no Biome, no build script. No
-  `packageManager` field, no committed lockfile.
-- `dependencies`: `react`, `react-dom`, `lucide-react`.
-  `peerDependencies`: `next ^16.3.0`.
-- `src/components/AEExpressionTool.tsx` imports
-  `../../../../src/components/tools-ui/ToolWrapper` — a relative path
-  that resolves to
-  `Desktop/my-web-2025/src/components/tools-ui/ToolWrapper.tsx` when
-  this repo lives at `Desktop/tool-ae-expression/` as a sibling of
-  `my-web-2025/`.
-- `src/AeExpressionApp.tsx` is a Next.js page wrapper using `next/link`
-  and Tailwind utility classes.
-- `src/components/useAEExpressionTool.ts` owns ~15 pieces of tool-local
-  state via `useState` (search term, selected category, parameters,
-  saved expressions, etc.). No persistence beyond in-memory state.
-- `src/components/ae-expression-data.ts` holds ~286 lines of static
-  expression definitions (no I/O, no fetch).
-- Total source surface: ~1320 LOC across `src/`.
-
-The repo is therefore:
-
-- A pure source-only package — no standalone build, no dev server, no
-  test framework, no formatter/lint config.
-- Validated indirectly by `my-web-2025`'s build (`bun run type-check`,
-  `bun run build`, `bun run lint`) which traverses this code via the
-  filesystem layout.
+- `package.json` は `scripts`（`dev` / `build` / `preview` /
+  `type-check`）と `devDependencies`（Vite 7 / `@vitejs/plugin-react` /
+  TypeScript / `@types/react` / `@types/react-dom`）を持ち、
+  `pnpm-lock.yaml` を commit する。`main` / `types` / `exports` は
+  `src/index.ts` を向く（host との識別子契約として維持）。
+- `peerDependencies.next` は削除した。`src/` に `next` の import は
+  0 件である。
+- `src/AeExpressionApp.tsx` は `next/link` を使わず、host ルートを
+  指す breadcrumb をテキスト描画する。
+- `src/components/AEExpressionTool.tsx` は host の
+  `../../../../src/components/tools-ui/ToolWrapper` を import せず、
+  repo 内の `src/components/ToolWrapper.tsx` を使う。
+- `src/components/useAEExpressionTool.ts` は
+  `src/components/ae-expression-storage.ts`（localStorage + メモリ
+  fallback）と `src/components/ae-expression-clipboard.ts`
+  （Clipboard API + `execCommand` fallback）経由で副作用を扱う。
+- 見た目は Tailwind utility class ではなく inline style
+  （`src/components/ae-expression-theme.ts` の token）で表現する。
+- 外部 origin への参照は 0 件。web font も CDN も使わない。
 
 ## Decision
 
 ### Role boundaries
 
-This repository:
+この repo は:
 
-- Owns **per-tool source** for one tool: `tool-ae-expression`.
-- Has **no build pipeline of its own**. Compilation, lint, type-check,
-  and bundling all happen in the host app's context.
-- Is consumed by `my-web-2025` via filesystem-relative imports, **not**
-  via `package.json` `link:` and **not** via registry publishing. Layout
-  requirement: this repo must live at `Desktop/tool-ae-expression/` as a
-  sibling of `Desktop/my-web-2025/`.
-- Is **private** — never published to npm. The `@rebuildup/tool-*`
-  namespace is reserved for in-workspace identifiers only.
+- 1 つの Tool の **source と build 済み artefact の両方を所有**する。
+- **standalone に build できる**（`pnpm run build` → `dist/`）。
+- host には **filesystem-relative import ではなく build 済み artefact**
+  で統合される。host は `dist/` を同一 origin の
+  `/tools/ae-expression/app/` に配信し、`sandbox="allow-scripts"` の
+  iframe で埋め込む。
+- **private** のまま。npm には publish しない（`@rebuildup/tool-*` は
+  workspace 内識別子として予約）。
 
-### What is intentionally out of scope here
+### Host への依存を禁ずる
 
-- Build / dev server / bundler config (host owns these).
-- Test framework (host owns these; tool-level tests would re-enter
-  host's test runner when added).
-- Lint / formatter config (host owns these).
-- Documentation for host-side embedding protocol
-  (`my-web-2025/spec/`); that spec lives in `my-web-2025` itself.
-- Internationalization (decided at host level).
-- Persistence of user data (`savedExpressions` etc.). Tool owns the
-  in-memory state shape; persistence layer (host CMS / localStorage /
-  etc.) is host's responsibility.
+- `next/*` の import 禁止。
+- host リポジトリの相対 import 禁止（`../../../../src/...` 形）。
+- host ルート（`/` / `/tools`）へのリンク禁止。iframe 内で辿ると
+  frame が tool から host へ遷移するため、breadcrumb / navigation は
+  テキスト描画とする。
+- host の `ToolWrapper` 相当は自前で持つ
+  （`src/components/ToolWrapper.tsx`）。prop 契約は host 版と同じ。
+
+### 副作用の境界
+
+- `localStorage` は **try/catch で保護**して使う。sandbox 付き iframe
+  （opaque origin）では `SecurityError` になるため、失敗時はメモリ内
+  state に fallback する（`src/components/ae-expression-storage.ts`）。
+- `navigator.clipboard` は reject / 未実装があり得るため、
+  `document.execCommand("copy")` への fallback を持つ
+  （`src/components/ae-expression-clipboard.ts`）。
+- 外部 origin への通信は 0 件。fetch / beacon / 外部 web font を
+  追加しない。
 
 ### Source layout
 
@@ -86,17 +76,27 @@ This repository:
 ├── AGENTS.md                              # dispatcher
 ├── README.md                              # public overview (English)
 ├── LICENSE                                # MIT
+├── index.html                             # standalone SPA entry (#root)
 ├── package.json                           # @rebuildup/tool-ae-expression, private
+├── pnpm-lock.yaml                         # committed lockfile (pnpm)
+├── pnpm-workspace.yaml                    # pnpm settings (allowBuilds)
+├── tsconfig.json                          # per-repo type check
+├── vite.config.ts                         # standalone build (base: "./")
 ├── src/
 │   ├── index.ts                           # public re-export (entry point)
-│   ├── AeExpressionApp.tsx                # Next.js page wrapper (Breadcrumb + tool)
+│   ├── main.tsx                           # standalone SPA mount (createRoot)
+│   ├── AeExpressionApp.tsx                # app shell (breadcrumb as text)
 │   └── components/
-│       ├── AEExpressionTool.tsx           # tool root; uses host's ToolWrapper
+│       ├── AEExpressionTool.tsx           # tool root; uses the local ToolWrapper
+│       ├── ToolWrapper.tsx                # standalone shell (replaces the host one)
 │       ├── ExpressionControls.tsx         # search/filter/preferences UI
 │       ├── ExpressionList.tsx             # selectable list of expressions
 │       ├── ExpressionParameters.tsx       # per-expression parameter inputs
 │       ├── ExpressionOutput.tsx           # generated code + validation + preview
 │       ├── useAEExpressionTool.ts         # state hook (all tool-local state)
+│       ├── ae-expression-clipboard.ts     # clipboard access + execCommand fallback
+│       ├── ae-expression-storage.ts       # localStorage access + in-memory fallback
+│       ├── ae-expression-theme.ts         # inline-style design tokens
 │       ├── ae-expression-data.ts          # static expression definitions
 │       ├── ae-expression-types.ts         # domain types
 │       └── ae-expression-utils.ts         # filtering / generation / validation
@@ -105,7 +105,8 @@ This repository:
 │   └── adr/
 │       ├── 0001-toolchain.md              # AI agent toolchain (revised)
 │       ├── 0002-architecture.md           # this ADR (revised)
-│       └── 0003-pr-driven-workflow.md     # PR-driven + main protection
+│       ├── 0003-pr-driven-workflow.md     # PR-driven + main protection
+│       └── 0004-standalone-embed-build.md # standalone build + iframe embed
 ├── .claude/
 │   └── skills/                            # project-local Agent Skills
 └── .github/
@@ -116,86 +117,70 @@ This repository:
 ### Dependency direction
 
 - `src/index.ts` → `src/AeExpressionApp.tsx`
+- `src/main.tsx` → `src/AeExpressionApp.tsx`（standalone mount）
 - `src/AeExpressionApp.tsx` → `src/components/AEExpressionTool.tsx`
-  + `next/link` (peer)
-- `src/components/AEExpressionTool.tsx` →
-  `../../../../src/components/tools-ui/ToolWrapper` (host app, **not**
-  this repo) + sibling components in `src/components/`
+- `src/components/AEExpressionTool.tsx` → `src/components/ToolWrapper.tsx`
+  + sibling components in `src/components/`
 - `src/components/useAEExpressionTool.ts` →
-  `src/components/ae-expression-{data,types,utils}.ts`
+  `src/components/ae-expression-{clipboard,storage,data,types,utils}.ts`
+- `src/components/*`（view）→ `src/components/ae-expression-theme.ts`
 
-The cross-host relative import is the **single fragile coupling** of
-this model. The tool repo MUST live as a sibling of `my-web-2025` for
-the import to resolve. If this layout changes, the import must be
-updated here.
+外部への依存は **host 側の build 済み artefact 配信** のみ。
 
 ### State ownership
 
-- All tool-local state lives in `useAEExpressionTool` (one hook, ~15
-  `useState` calls). UI components receive state and setters as props
-  from `AEExpressionTool`.
-- Persistence: not implemented at tool level. `savedExpressions` is
-  in-memory only. If persistence is needed, the hook should be
-  refactored to accept a persistence adapter from the host.
+- すべての tool-local state は `useAEExpressionTool`（1 hook, ~16
+  `useState`）。UI component は props で state と setter を受け取る。
+- Persistence: tool が **localStorage を 직접所有**し、memory fallback
+  を持つ。host の adapter 注入は当面行わない（sandbox 前提では host
+  storage は reach できないため、host 側が persistence を担う意味が
+  ない）。
 
 ### Naming
 
-- `src/AeExpressionApp.tsx` is the **Next.js page-level entry**. The
-  `App` suffix communicates "Next.js route entry".
-- `src/components/AEExpressionTool.tsx` is the **tool-level root** (the
-  unit the host treats as embeddable). The `Tool` suffix matches the
-  host's `ToolWrapper` naming convention.
-- Internal components (`ExpressionControls`, `ExpressionList`, etc.)
-  drop the `AE` / `Tool` prefix when scoped within the tool — the
-  surrounding folder already conveys context.
-- `ae-expression-data.ts` / `ae-expression-types.ts` /
-  `ae-expression-utils.ts` use kebab-case (matches the file's domain
-  name, not the namespace).
-- Dumping-ground names (`utils`, `helpers`, `common`, `misc`, `manager`)
-  forbidden. Note: `ae-expression-utils.ts` is **not** a dumping-ground;
-  it holds this tool's domain-specific pure functions (filtering /
-  generation / validation).
-
-### Persistence boundaries
-
-- Per-tool: none. State resets on remount.
-- If persistence is added: receive a `persistenceAdapter` prop or
-  context from host; do not touch `localStorage` / `IndexedDB` directly.
+- `src/AeExpressionApp.tsx` は **app レベル entry**。`App` suffix で
+  「1 つの Tool アプリ」を表す。
+- `src/components/AEExpressionTool.tsx` は **tool レベル root**。
+- `src/components/ToolWrapper.tsx` は **この repo の shell**。host 版と
+  同じ名前・同じ prop 契約を保ち、差し替え点的互換性を保つ。
+- 内部 component（`ExpressionControls` 等）は tool 内 scope では
+  `AE` / `Tool` prefix を落とす。
+- `ae-expression-*` は kebab-case の domain 名。
+- Dumping-ground 名称（`utils`, `helpers`, `common`, `misc`, `manager`）
+  禁止。`ae-expression-utils.ts` は dumping-ground ではなく、この
+  tool の domain 固有の pure function（filtering / generation /
+  validation）を持つ。
 
 ### Side-effect boundaries
 
-- No `fetch` / `WebSocket` / `Worker` in current code. If added: go
-  through host's effect API, not directly.
-- `validateExpression` is pure (no I/O). Keep this invariant.
+- `fetch` / `WebSocket` / `Worker` を使わない（外部 origin 0 件）。
+- `validateExpression` は pure（I/O なし）。この invariant を保つ。
 
 ## Consequences
 
-- This repo alone cannot be built, linted, type-checked, or tested. The
-  canonical validation entry point lives in `my-web-2025`'s scripts.
-- Moving this repo to a different filesystem path will break the
-  `../../../../src/components/tools-ui/ToolWrapper` import.
-- The `@rebuildup/tool-ae-expression` package name is reserved for
-  in-workspace identification only. Do not publish to npm.
+- この repo 単体で build / type-check できる。sibling layout 制約は
+  なくなった。
+- host 側は submodule を取り込み `pnpm install --frozen-lockfile &&
+  pnpm run build` を実行し、`dist/` を `/tools/<slug>/app/` に配信
+  すればよい。
+- `@rebuildup/tool-ae-expression` は workspace 内識別子のみ。npm へ
+  publish しない。
+- export（ダウンロード）は sandbox に `allow-downloads` が無い限り
+  browser が落とす。host 側の manifest 判断事項。
 
 ## Reproduction
 
-This ADR's assumptions are satisfied when:
+本 ADR の前提は次が成り立つ間有効である:
 
-1. `Desktop/tool-ae-expression/` exists as a sibling of
-   `Desktop/my-web-2025/`.
-2. `my-web-2025/src/components/tools-ui/ToolWrapper.tsx` exists.
-3. `my-web-2025`'s `bun run type-check` and `bun run build` traverse
-   this tool's source.
+1. `pnpm run build` が `dist/index.html` を生成する。
+2. `dist/index.html` の asset 参照が `./assets/...` である。
+3. `grep -rn "next/" src/` が 0 件である。
+4. `src/` に host リポジトリへの相対 import がない。
 
 ## Re-evaluation
 
 Revisit when:
 
-- The embed mechanism changes (e.g. switch to `link:` protocol,
-  monorepo tool, or published package).
-- Tool gains its own persistence layer.
-- A per-tool test runner is required (Vitest in this repo).
-- Host's `ToolWrapper` interface changes in a breaking way.
-- Next.js major version is bumped.
-- This repo's filesystem layout changes (host import path must be
-  updated).
+- host 側の embed 契約（sandbox token、allowlist）が変更されたとき。
+- tool が host へ 保存済みデータ を渡す必要が生じたとき。
+- この repo が複数 Tool を含む構成へ変更されたとき。

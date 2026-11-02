@@ -1,45 +1,58 @@
 "use client";
 
-import Link from "next/link";
 import AEExpressionTool from "./components/AEExpressionTool";
+import { COLORS, FONT_SANS } from "./components/ae-expression-theme";
 
 export default function AeExpressionApp() {
 	return (
-		<div className="relative min-h-screen ">
-			<main className="relative z-10 min-h-screen py-10" tabIndex={-1}>
-				<div className="mx-auto w-full max-w-6xl space-y-16 px-4 sm:px-6 lg:px-8">
-					<nav
-						aria-label="Breadcrumb"
-						className="text-xs md:text-sm mb-4 pt-4"
-					>
-						<ol className="flex items-baseline space-x-1 md:space-x-2 noto-sans-jp-light p-0 list-none m-0">
-							<li className="flex items-baseline">
-								<Link
-									href="/"
-									className=" transition-colors duration-200 hover:underline leading-none"
-								>
-									Home
-								</Link>
+		<div style={{ position: "relative", minHeight: "100vh" }}>
+			<main
+				style={{ position: "relative", zIndex: 10, minHeight: "100vh", padding: "40px 0" }}
+				tabIndex={-1}
+			>
+				<div
+					style={{
+						maxWidth: "72rem",
+						margin: "0 auto",
+						padding: "0 16px",
+						display: "flex",
+						flexDirection: "column",
+						gap: "64px",
+					}}
+				>
+					<nav aria-label="Breadcrumb" style={{ marginBottom: "16px", paddingTop: "16px" }}>
+						<ol
+							style={{
+								display: "flex",
+								alignItems: "baseline",
+								gap: "4px",
+								listStyle: "none",
+								padding: 0,
+								margin: 0,
+								fontSize: "0.75rem",
+								color: COLORS.muted,
+								fontFamily: FONT_SANS,
+							}}
+						>
+							<li style={{ display: "flex", alignItems: "baseline" }}>
+								<span>Home</span>
 							</li>
-							<li className="flex items-baseline">
-								<span className="mx-2 select-none leading-none">/</span>
-								<Link
-									href="/tools"
-									className=" transition-colors duration-200 hover:underline leading-none"
-								>
-									Tools
-								</Link>
-							</li>
-							<li className="flex items-baseline">
-								<span className="mx-2 select-none leading-none">/</span>
-								<span className=" leading-none" aria-current="page">
-									After Effects Expression Helper
+							<li style={{ display: "flex", alignItems: "baseline" }}>
+								<span aria-hidden="true" style={{ margin: "0 8px" }}>
+									/
 								</span>
+								<span>Tools</span>
+							</li>
+							<li style={{ display: "flex", alignItems: "baseline" }}>
+								<span aria-hidden="true" style={{ margin: "0 8px" }}>
+									/
+								</span>
+								<span aria-current="page">After Effects Expression Helper</span>
 							</li>
 						</ol>
 					</nav>
 
-					<section className="space-y-6">
+					<section style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 						<AEExpressionTool />
 					</section>
 				</div>

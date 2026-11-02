@@ -274,11 +274,6 @@ export const CATEGORY_NAMES = {
 	transform: "変形",
 	utility: "ユーティリティ",
 };
-export const DIFFICULTY_COLORS = {
-	beginner: "  ",
-	intermediate: "  ",
-	advanced: "  ",
-};
 export const DIFFICULTY_NAMES = {
 	beginner: "初級",
 	intermediate: "中級",
